@@ -2,12 +2,27 @@
 #include <ModbusMaster.h>
 #include <WiFi.h>
 #include <PubSubClient.h>  
+#include <Wire.h> 
+#include "ETT_PCF8574.h"
+#include <string>
 //=================================================================================================
 #define SerialDebug           Serial                                                              
 //=================================================================================================
 #define SerialRS485_RX_PIN    26
 #define SerialRS485_TX_PIN    27
 #define SerialRS485           Serial2                                                             
+//=================================================================================================
+#define I2C_SCL_PIN           22                                                                  
+#define I2C_SDA_PIN           21   
+//=================================================================================================
+ETT_PCF8574 exp_i2c_io(PCF8574A_ID_DEV0); 
+#define RelayOn               LOW                                                                 // On Relay Ative(LOW)
+#define RelayOff              HIGH    
+#define ry3_onboard_pin       6 
+#define OnRelay()            exp_i2c_io.writePin(ry3_onboard_pin, RelayOn)                  // Open  = ON  Relay
+#define OffRelay()           exp_i2c_io.writePin(ry3_onboard_pin, RelayOff)                 // Close = OFF Relay
+#define ToggleRelay()        exp_i2c_io.writePin(ry3_onboard_pin, !exp_i2c_io.readPin(ry3_onboard_pin))   // Close = OFF Relay
+#define ReadRelay()          !exp_i2c_io.readPin(ry3_onboard_pin) 
 //=================================================================================================
 #define modbusSensor_SlaveID      1                                                                    
 //=================================================================================================
@@ -54,16 +69,25 @@ void setup_wifi() {
   SerialDebug.println(WiFi.localIP());
 }
 //=================================================================================================
+String text;
 void callback(char *topic, byte *payload, unsigned int length) {
-  SerialDebug.print("Message arrived in topic: ");
-  SerialDebug.println(topic);
-  SerialDebug.print("Message:");
-
   for (int i = 0; i < length; i++) 
-     SerialDebug.print((char) payload[i]);
+     text+=(char) payload[i];
+  //SerialDebug.println(text);
+  //SerialDebug.println(topic);
+  //SerialDebug.println(strcmp(topic,"controlhumi"));
+  //SerialDebug.println(text.compareTo("true"));
+  //SerialDebug.println("+++++++++++++++++++++++++++++++++");
+  if(strcmp(topic,"controlhumi")==0)
+  {
 
-  SerialDebug.println();
-  SerialDebug.println("-----------------------");
+    if(text.compareTo("true")==0)
+      OnRelay();
+    else
+      OffRelay();
+  }
+  text="";
+
 }
 //=================================================================================================
 void reconnect() {
@@ -86,6 +110,9 @@ void reconnect() {
 //=================================================================================================
 void setup() 
 {
+  Wire.begin(I2C_SDA_PIN,I2C_SCL_PIN);                                                      
+  exp_i2c_io.begin(0xFF);
+  OffRelay();
   //===============================================================================================
   Serial.begin(9600);
   SerialDebug.begin(9600);
