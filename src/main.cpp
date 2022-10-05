@@ -31,6 +31,11 @@ int relay_onboard_pin[4] = {0, ry1_onboard_pin, ry2_onboard_pin, ry3_onboard_pin
 //=================================================================================================
 #define MSG_BUFFER_SIZE (500)
 //=================================================================================================
+#define LedPin                2                                                                   // ESP32-WROVER  : IO2
+#define LedLogicOn            HIGH
+#define LedLogicOff           LOW
+#define InitialLed()          pinMode(LedPin,OUTPUT)
+//=================================================================================================
 const char *ssid = "CE-ESL";
 const char *password = "ceeslonly";
 const char *mqtt_broker = "139.59.242.154";
@@ -134,6 +139,7 @@ void setup()
 {
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   exp_i2c_io.begin(0xFF);
+  InitialLed();
   for (int i = 1; i < 4; i++)
     OffRelay(i);
   //===============================================================================================
@@ -157,6 +163,7 @@ void setup()
   client.subscribe("els/mushroom1/controltemp");
   client.subscribe("els/mushroom1/controlhumi");
   client.subscribe("els/mushroom1/controllight");
+  client.publish("els/mushroom1/status", "ready");
   settemp=nodeSensorWeather.getResponseBuffer(0) / 10;
   sethumi=nodeSensorWeather.getResponseBuffer(1) / 10;
   //===============================================================================================
@@ -172,6 +179,7 @@ void loop()
     //=============================================================================================
     if (read_modbus_status == nodeSensorWeather.ku8MBSuccess)
     {
+      digitalWrite(LedPin, !digitalRead(LedPin));
       //===========================================================================================
       temperature = (float)nodeSensorWeather.getResponseBuffer(0) / 10;
       humidity = (float)nodeSensorWeather.getResponseBuffer(1) / 10;
@@ -184,21 +192,39 @@ void loop()
       SerialDebug.print(" %");
       SerialDebug.println();
       //===========================================================================================
-      sprintf(humidity_text, "%g", humidity);
-      sprintf(temperature_text, "%g", temperature);
-      client.publish("els/mushroom1/temp", temperature_text);
-      client.publish("els/mushroom1/humi", humidity_text);
-      if ((int)temperature >= settemp - 1)
-        OnRelay(2);
-      else
-        OffRelay(2);
-      if ((int)humidity <= sethumi)
-        OnRelay(3);
-      else
-        OffRelay(3);
-      //===========================================================================================
+      
     }
+    SerialDebug.println(read_modbus_status);
+    SerialDebug.println(sethumi);
+    SerialDebug.println(settemp);
     lastGetModbusTime = millis();
+    sprintf(humidity_text, "%g", humidity);
+    sprintf(temperature_text, "%g", temperature);
+    client.publish("els/mushroom1/temp", temperature_text);
+    client.publish("els/mushroom1/humi", humidity_text);
+    if ((int)temperature >= settemp )
+    {
+        OnRelay(2);
+        client.publish("els/mushroom1/temp/status", "true");
+    }
+      
+    else if ((int)temperature <= settemp-2 )
+    {
+        OffRelay(2);
+        client.publish("els/mushroom1/temp/status", "false");
+    }
+      
+    if ((int)humidity <= sethumi)
+    {
+        OnRelay(3);
+        client.publish("els/mushroom1/humi/status", "true");
+    }
+      
+    else if ((int)humidity >= sethumi+5)
+    {
+        OffRelay(3);
+        client.publish("els/mushroom1/humi/status", "false");
+    }
     //=============================================================================================
   }
   //===============================================================================================
