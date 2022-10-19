@@ -60,6 +60,7 @@ char humidity_text[10];
 int settemp;
 int sethumi;
 int tempInteger;
+int error;
 //=================================================================================================
 void setup_wifi()
 {
@@ -194,15 +195,20 @@ void loop()
       //===========================================================================================
       
     }
-    SerialDebug.println(read_modbus_status);
-    SerialDebug.println(WiFi.localIP());
-    SerialDebug.println(WiFi.macAddress());
-    SerialDebug.print(client.state());
+    SerialDebug.print("mqtt state -> ");
+    SerialDebug.println(client.state());
+    SerialDebug.print("count mqtt error -> ");
+    SerialDebug.println(error);
     lastGetModbusTime = millis();
     sprintf(humidity_text, "%g", humidity);
     sprintf(temperature_text, "%g", temperature);
     client.publish("els/mushroom1/temp", temperature_text);
     client.publish("els/mushroom1/humi", humidity_text);
+    if(client.state())
+    {
+      error++;
+      reconnect();
+    }
     if ((int)temperature >= settemp )
     {
         OnRelay(2);
