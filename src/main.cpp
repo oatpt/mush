@@ -123,13 +123,13 @@ void reconnect()
   {
     String client_id = "esp32-client-";
     client_id += String(WiFi.macAddress());
-    Serial.printf("The client %s connects to the public mqtt broker\n", client_id.c_str());
+    SerialDebug.printf("The client %s connects to the public mqtt broker\n", client_id.c_str());
     if (client.connect(client_id.c_str(), mqtt_username, mqtt_password))
-      Serial.println("Public emqx mqtt broker connected");
+      SerialDebug.println("Public emqx mqtt broker connected");
     else
     {
-      Serial.print("failed with state ");
-      Serial.print(client.state());
+      SerialDebug.print("failed with state ");
+      SerialDebug.print(client.state());
       delay(2000);
     }
   }
@@ -195,8 +195,9 @@ void loop()
       
     }
     SerialDebug.println(read_modbus_status);
-    SerialDebug.println(sethumi);
-    SerialDebug.println(settemp);
+    SerialDebug.println(WiFi.localIP());
+    SerialDebug.println(WiFi.macAddress());
+    SerialDebug.print(client.state());
     lastGetModbusTime = millis();
     sprintf(humidity_text, "%g", humidity);
     sprintf(temperature_text, "%g", temperature);
