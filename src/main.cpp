@@ -38,7 +38,7 @@ int relay_onboard_pin[4] = {0, ry1_onboard_pin, ry2_onboard_pin, ry3_onboard_pin
 //=================================================================================================
 const char *ssid = "CE-ESL";
 const char *password = "ceeslonly";
-const char *mqtt_broker = "139.59.242.154";
+const char *mqtt_broker = "192.168.1.156";
 const char *mqtt_username = "esl";
 const char *mqtt_password = "esl603";
 const int mqtt_port = 1883;
