@@ -1,6 +1,7 @@
 #include <HardwareSerial.h>
 #include <ModbusMaster.h>
 #include <WiFi.h>
+#include <Wire.h>
 #include <PubSubClient.h>
 #include "ETT_PCF8574.h"
 #include <string>
@@ -34,6 +35,10 @@ int relay_onboard_pin[4] = {0, ry1_onboard_pin, ry2_onboard_pin, ry3_onboard_pin
 #define LedLogicOn            HIGH
 #define LedLogicOff           LOW
 #define InitialLed()          pinMode(LedPin,OUTPUT)
+//=================================================================================================
+
+#define TIME_OUT                10     
+
 //=================================================================================================
 const char *ssid = "CE-ESL";
 const char *password = "ceeslonly";
@@ -118,7 +123,8 @@ void reconnect()
 {
   client.setServer(mqtt_broker, mqtt_port);
   client.setCallback(callback);
-  while (!client.connected())
+  uint8_t count = 0;
+  while (!client.connected() && count < TIME_OUT)
   {
     String client_id = "esp32-client-";
     client_id += String(WiFi.macAddress());
@@ -129,7 +135,7 @@ void reconnect()
     {
       SerialDebug.print("failed with state ");
       SerialDebug.print(client.state());
-      delay(2000);
+      delay(500);
     }
   }
 }
@@ -202,6 +208,7 @@ void read_temp_humi()
 
 void setup()
 {
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   exp_i2c_io.begin(0xFF);
   InitialLed();
   for (int i = 1; i < 4; i++)
