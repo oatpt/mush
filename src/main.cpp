@@ -2,7 +2,6 @@
 #include <ModbusMaster.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include <Wire.h>
 #include "ETT_PCF8574.h"
 #include <string>
 //=================================================================================================
@@ -75,7 +74,6 @@ void setup_wifi()
     delay(500);
     SerialDebug.println("Connecting to WiFi...");
   }
-  randomSeed(micros());
   SerialDebug.println("WiFi connected");
   SerialDebug.println("IP address: ");
   SerialDebug.println(WiFi.localIP());
@@ -136,9 +134,74 @@ void reconnect()
   }
 }
 //=================================================================================================
+void control_humi()
+{
+  if ((int)humidity <= sethumi)
+    {
+        OnRelay(3);
+        client.publish("els/mushroom1/humi/status", "true");
+    }
+      
+    else if ((int)humidity >= sethumi+5)
+    {
+        OffRelay(3);
+        client.publish("els/mushroom1/humi/status", "false");
+    }
+}
+
+void control_temp()
+{
+  if ((int)temperature >= settemp )
+    {
+        OnRelay(2);
+        client.publish("els/mushroom1/temp/status", "true");
+    }
+      
+    else if ((int)temperature <= settemp-2 )
+    {
+        OffRelay(2);
+        client.publish("els/mushroom1/temp/status", "false");
+    }
+}
+
+void check_status_mqtt()
+{
+  if(client.state())
+    {
+      error++;
+      reconnect();
+    }
+}
+
+void read_temp_humi()
+{
+  read_modbus_status = nodeSensorWeather.readInputRegisters(0x0001, 2);
+    //=============================================================================================
+    if (read_modbus_status == nodeSensorWeather.ku8MBSuccess)
+    {
+      digitalWrite(LedPin, !digitalRead(LedPin));
+      //===========================================================================================
+      temperature = (float)nodeSensorWeather.getResponseBuffer(0) / 10;
+      humidity = (float)nodeSensorWeather.getResponseBuffer(1) / 10;
+      //===========================================================================================
+      SerialDebug.print("Temperature = ");
+      SerialDebug.print(temperature, 1);
+      SerialDebug.print(" C");
+      SerialDebug.print(" : Humidity = ");
+      SerialDebug.print(humidity, 1);
+      SerialDebug.print(" %");
+      SerialDebug.println();
+      //===========================================================================================
+      sprintf(humidity_text, "%g", humidity);
+      sprintf(temperature_text, "%g", temperature);
+      client.publish("els/mushroom1/temp", temperature_text);
+      client.publish("els/mushroom1/humi", humidity_text);
+    }
+    lastGetModbusTime = millis();
+}
+
 void setup()
 {
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   exp_i2c_io.begin(0xFF);
   InitialLed();
   for (int i = 1; i < 4; i++)
@@ -165,8 +228,6 @@ void setup()
   client.subscribe("els/mushroom1/controlhumi");
   client.subscribe("els/mushroom1/controllight");
   client.publish("els/mushroom1/status", "ready");
-  settemp=nodeSensorWeather.getResponseBuffer(0) / 10;
-  sethumi=nodeSensorWeather.getResponseBuffer(1) / 10;
   //===============================================================================================
 }
 
@@ -176,63 +237,16 @@ void loop()
   client.loop();
   if ((millis() - lastGetModbusTime) > 5000)
   {
-    read_modbus_status = nodeSensorWeather.readInputRegisters(0x0001, 2);
-    //=============================================================================================
-    if (read_modbus_status == nodeSensorWeather.ku8MBSuccess)
-    {
-      digitalWrite(LedPin, !digitalRead(LedPin));
-      //===========================================================================================
-      temperature = (float)nodeSensorWeather.getResponseBuffer(0) / 10;
-      humidity = (float)nodeSensorWeather.getResponseBuffer(1) / 10;
-      //===========================================================================================
-      SerialDebug.print("Temperature = ");
-      SerialDebug.print(temperature, 1);
-      SerialDebug.print(" C");
-      SerialDebug.print(" : Humidity = ");
-      SerialDebug.print(humidity, 1);
-      SerialDebug.print(" %");
-      SerialDebug.println();
-      //===========================================================================================
-      
-    }
-    SerialDebug.print("mqtt state -> ");
+    read_temp_humi();
+    SerialDebug.print(F("mqtt state -> "));
     SerialDebug.println(client.state());
     SerialDebug.print("count mqtt error -> ");
+    check_status_mqtt();
     SerialDebug.println(error);
-    lastGetModbusTime = millis();
-    sprintf(humidity_text, "%g", humidity);
-    sprintf(temperature_text, "%g", temperature);
-    client.publish("els/mushroom1/temp", temperature_text);
-    client.publish("els/mushroom1/humi", humidity_text);
-    if(client.state())
-    {
-      error++;
-      reconnect();
-    }
-    if ((int)temperature >= settemp )
-    {
-        OnRelay(2);
-        client.publish("els/mushroom1/temp/status", "true");
-    }
-      
-    else if ((int)temperature <= settemp-2 )
-    {
-        OffRelay(2);
-        client.publish("els/mushroom1/temp/status", "false");
-    }
-      
-    if ((int)humidity <= sethumi)
-    {
-        OnRelay(3);
-        client.publish("els/mushroom1/humi/status", "true");
-    }
-      
-    else if ((int)humidity >= sethumi+5)
-    {
-        OffRelay(3);
-        client.publish("els/mushroom1/humi/status", "false");
-    }
+    control_temp();
+    control_humi();
     //=============================================================================================
   }
   //===============================================================================================
 }
+
