@@ -1,6 +1,7 @@
 #include <HardwareSerial.h>
 #include <ModbusMaster.h>
 #include <WiFi.h>
+#include <Wire.h>
 #include <PubSubClient.h>
 #include "ETT_PCF8574.h"
 #include <string>
@@ -34,6 +35,10 @@ int relay_onboard_pin[4] = {0, ry1_onboard_pin, ry2_onboard_pin, ry3_onboard_pin
 #define LedLogicOn            HIGH
 #define LedLogicOff           LOW
 #define InitialLed()          pinMode(LedPin,OUTPUT)
+//=================================================================================================
+
+#define TIME_OUT                10     
+
 //=================================================================================================
 const char *ssid = "CE-ESL";
 const char *password = "ceeslonly";
@@ -118,30 +123,38 @@ void reconnect()
 {
   client.setServer(mqtt_broker, mqtt_port);
   client.setCallback(callback);
-  while (!client.connected())
+  uint8_t count = 0;
+  while (!client.connected() && count < TIME_OUT)
   {
     String client_id = "esp32-client-";
     client_id += String(WiFi.macAddress());
     SerialDebug.printf("The client %s connects to the public mqtt broker\n", client_id.c_str());
-    if (client.connect(client_id.c_str(), mqtt_username, mqtt_password))
+    if (client.connect(client_id.c_str(), mqtt_username, mqtt_password)) {
       SerialDebug.println("Public emqx mqtt broker connected");
+      client.subscribe("els/mushroom1/controltemp");
+      client.subscribe("els/mushroom1/controlhumi");
+      client.subscribe("els/mushroom1/controllight");
+      client.publish("els/mushroom1/status", "ready");
+    }
     else
     {
       SerialDebug.print("failed with state ");
       SerialDebug.print(client.state());
-      delay(2000);
+      delay(500);
     }
   }
 }
 //=================================================================================================
 void control_humi()
 {
+  char humiControl_text[10];
+  sprintf(humiControl_text, "%d", sethumi);
+  client.publish("els/mushroom1/humi/control", humiControl_text);
   if ((int)humidity <= sethumi)
     {
         OnRelay(3);
         client.publish("els/mushroom1/humi/status", "true");
     }
-      
     else if ((int)humidity >= sethumi+5)
     {
         OffRelay(3);
@@ -151,12 +164,14 @@ void control_humi()
 
 void control_temp()
 {
+  char tempControl_text[10];
+  sprintf(tempControl_text, "%d", settemp);
+  client.publish("els/mushroom1/temp/control", tempControl_text);
   if ((int)temperature >= settemp )
     {
         OnRelay(2);
         client.publish("els/mushroom1/temp/status", "true");
     }
-      
     else if ((int)temperature <= settemp-2 )
     {
         OffRelay(2);
@@ -166,7 +181,7 @@ void control_temp()
 
 void check_status_mqtt()
 {
-  if(client.state())
+  if(client.state() != 0)
     {
       error++;
       reconnect();
@@ -202,6 +217,7 @@ void read_temp_humi()
 
 void setup()
 {
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   exp_i2c_io.begin(0xFF);
   InitialLed();
   for (int i = 1; i < 4; i++)
@@ -224,9 +240,6 @@ void setup()
   SerialDebug.println("ET-ESP32(WROVER)RS485 V3.....Ready");
   SerialDebug.println();
   //===============================================================================================
-  client.subscribe("els/mushroom1/controltemp");
-  client.subscribe("els/mushroom1/controlhumi");
-  client.subscribe("els/mushroom1/controllight");
   client.publish("els/mushroom1/status", "ready");
   //===============================================================================================
 }
