@@ -129,8 +129,13 @@ void reconnect()
     String client_id = "esp32-client-";
     client_id += String(WiFi.macAddress());
     SerialDebug.printf("The client %s connects to the public mqtt broker\n", client_id.c_str());
-    if (client.connect(client_id.c_str(), mqtt_username, mqtt_password))
+    if (client.connect(client_id.c_str(), mqtt_username, mqtt_password)) {
       SerialDebug.println("Public emqx mqtt broker connected");
+      client.subscribe("els/mushroom1/controltemp");
+      client.subscribe("els/mushroom1/controlhumi");
+      client.subscribe("els/mushroom1/controllight");
+      client.publish("els/mushroom1/status", "ready");
+    }
     else
     {
       SerialDebug.print("failed with state ");
@@ -142,12 +147,14 @@ void reconnect()
 //=================================================================================================
 void control_humi()
 {
+  char humiControl_text[10];
+  sprintf(humiControl_text, "%d", sethumi);
+  client.publish("els/mushroom1/humi/control", humiControl_text);
   if ((int)humidity <= sethumi)
     {
         OnRelay(3);
         client.publish("els/mushroom1/humi/status", "true");
     }
-      
     else if ((int)humidity >= sethumi+5)
     {
         OffRelay(3);
@@ -157,12 +164,14 @@ void control_humi()
 
 void control_temp()
 {
+  char tempControl_text[10];
+  sprintf(tempControl_text, "%d", settemp);
+  client.publish("els/mushroom1/temp/control", tempControl_text);
   if ((int)temperature >= settemp )
     {
         OnRelay(2);
         client.publish("els/mushroom1/temp/status", "true");
     }
-      
     else if ((int)temperature <= settemp-2 )
     {
         OffRelay(2);
@@ -172,7 +181,7 @@ void control_temp()
 
 void check_status_mqtt()
 {
-  if(client.state())
+  if(client.state() != 0)
     {
       error++;
       reconnect();
@@ -231,9 +240,6 @@ void setup()
   SerialDebug.println("ET-ESP32(WROVER)RS485 V3.....Ready");
   SerialDebug.println();
   //===============================================================================================
-  client.subscribe("els/mushroom1/controltemp");
-  client.subscribe("els/mushroom1/controlhumi");
-  client.subscribe("els/mushroom1/controllight");
   client.publish("els/mushroom1/status", "ready");
   //===============================================================================================
 }
