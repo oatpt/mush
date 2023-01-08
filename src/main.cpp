@@ -24,7 +24,7 @@ ETT_PCF8574 exp_i2c_io(PCF8574A_ID_DEV0);
 int relay_onboard_pin[4] = {0, ry1_onboard_pin, ry2_onboard_pin, ry3_onboard_pin};
 #define OnRelay(r) exp_i2c_io.writePin(relay_onboard_pin[r], RelayOn)                                  // Open  = ON  Relay
 #define OffRelay(r) exp_i2c_io.writePin(relay_onboard_pin[r], RelayOff)                                // Close = OFF Relay
-#define ToggleRelay(r) exp_i2c_io.writePin(relay_onboard_pin[r], !exp_i2c_io.readPin(ry3_onboard_pin)) // Close = OFF Relay
+#define ToggleRelay(r) exp_i2c_io.writePin(relay_onboard_pin[r], !exp_i2c_io.readPin(ry3_onboard_pin)) 
 #define ReadRelay(r) !exp_i2c_io.readPin(relay_onboard_pin[r])
 //=================================================================================================
 #define modbusSensor_SlaveID 1
@@ -36,16 +36,23 @@ int relay_onboard_pin[4] = {0, ry1_onboard_pin, ry2_onboard_pin, ry3_onboard_pin
 #define LedLogicOff           LOW
 #define InitialLed()          pinMode(LedPin,OUTPUT)
 //=================================================================================================
-
 #define TIME_OUT                10     
-
+//=================================================================================================
+#define gap_humi 5
+#define gap_temp 2
+#define light 1
+#define conditioning 2
+#define fog_machine 3
+#define address_tempSensor 0x0001
+#define durationTime 5000
 //=================================================================================================
 const char *ssid = "CE-ESL";
 const char *password = "ceeslonly";
 const char *mqtt_broker = "192.168.1.156";
 const char *mqtt_username = "esl";
 const char *mqtt_password = "esl603";
-const int mqtt_port = 1883;
+const int  mqtt_port = 1883;
+
 //=================================================================================================
 ModbusMaster nodeSensorWeather;
 WiFiClient espClient;
@@ -90,7 +97,7 @@ void callback(char *topic, byte *payload, unsigned int length)
   if (strcmp(topic, "els/mushroom1/controlhumi") == 0)
   {
     tempInteger = 0;
-    for (int i = 0; i < length; i++)
+    for (int i = 0; i < length; i++)//char to int
     {
       tempInteger *= 10;
       tempInteger += (char)payload[i] - 48;
@@ -100,7 +107,7 @@ void callback(char *topic, byte *payload, unsigned int length)
   else if (strcmp(topic, "els/mushroom1/controltemp") == 0)
   {
     tempInteger = 0;
-    for (int i = 0; i < length; i++)
+    for (int i = 0; i < length; i++)//char to int
     {
       tempInteger *= 10;
       tempInteger += (char)payload[i] - 48;
@@ -113,9 +120,9 @@ void callback(char *topic, byte *payload, unsigned int length)
     for (int i = 0; i < length; i++)
       text += (char)payload[i];
     if (text.compareTo("true") == 0)
-      OnRelay(1);
+      OnRelay(light);
     else
-      OffRelay(1);
+      OffRelay(light);
   }
 }
 //=================================================================================================
@@ -152,12 +159,12 @@ void control_humi()
   client.publish("els/mushroom1/humi/control", humiControl_text);
   if ((int)humidity <= sethumi)
     {
-        OnRelay(3);
+        OnRelay(fog_machine);
         client.publish("els/mushroom1/humi/status", "true");
     }
-    else if ((int)humidity >= sethumi+5)
+    else if ((int)humidity >= sethumi+gap_humi)
     {
-        OffRelay(3);
+        OffRelay(fog_machine);
         client.publish("els/mushroom1/humi/status", "false");
     }
 }
@@ -169,12 +176,12 @@ void control_temp()
   client.publish("els/mushroom1/temp/control", tempControl_text);
   if ((int)temperature >= settemp )
     {
-        OnRelay(2);
+        OnRelay(conditioning);
         client.publish("els/mushroom1/temp/status", "true");
     }
-    else if ((int)temperature <= settemp-2 )
+    else if ((int)temperature <= settemp-gap_temp )
     {
-        OffRelay(2);
+        OffRelay(conditioning);
         client.publish("els/mushroom1/temp/status", "false");
     }
 }
@@ -190,9 +197,8 @@ void check_status_mqtt()
 
 void read_temp_humi()
 {
-  read_modbus_status = nodeSensorWeather.readInputRegisters(0x0001, 2);
-    //=============================================================================================
-    if (read_modbus_status == nodeSensorWeather.ku8MBSuccess)
+  read_modbus_status = nodeSensorWeather.readInputRegisters(address_tempSensor, 2);    
+  if (read_modbus_status == nodeSensorWeather.ku8MBSuccess)
     {
       digitalWrite(LedPin, !digitalRead(LedPin));
       //===========================================================================================
@@ -240,15 +246,13 @@ void setup()
   SerialDebug.println("ET-ESP32(WROVER)RS485 V3.....Ready");
   SerialDebug.println();
   //===============================================================================================
-  client.publish("els/mushroom1/status", "ready");
-  //===============================================================================================
 }
 
 void loop()
 {
   //===============================================================================================
   client.loop();
-  if ((millis() - lastGetModbusTime) > 5000)
+  if ((millis() - lastGetModbusTime) > durationTime)  
   {
     read_temp_humi();
     SerialDebug.print(F("mqtt state -> "));
